@@ -1,0 +1,212 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import numpy as np
+import pandas as pd
+import random as rand
+import matplotlib.pyplot as plt
+from statistics import stdev
+from statistics import mean
+from operator import itemgetter
+
+
+#3a) 
+
+def f1(x, y):
+    return (np.sin(2*x) + np.cos(y/2))
+
+def f2(x, y):
+    return (np.absolute(x-2) + np.absolute(0.5*y+1) - 4)
+
+#Plot f1
+    
+x = np.linspace(0, 10, 100)
+y = np.linspace(0, 10, 100)
+
+X, Y = np.meshgrid(x, y)
+Z = f1(X, Y)
+fig = plt.figure()
+ax = plt.axes(projection='3d')
+ax.contour3D(X, Y, Z, 50)
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z');
+
+#plot f2
+
+x = np.linspace(0, 10, 100)
+y = np.linspace(0, 10, 100)
+
+X, Y = np.meshgrid(x, y)
+Z = f2(X, Y)
+fig = plt.figure()
+ax = plt.axes(projection='3d')
+ax.contour3D(X, Y, Z, 50)
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z');
+
+##Select the best successor for a point (x, y) under a function f()
+
+def best_neighbor(s,f,x,y):
+    x_ = max(x-s,0)
+    y_ = max(y-s,0)
+    xp = min(x+s,10)
+    yp = min(y+s,10)
+    num = [x_,y,f(x_,y)]
+    l = [[x_,y, f(x_,y)],[x_,y_, f(x_,y_)],[x_,yp, f(x_,yp)],[x,y_, f(x,y_)],[x,yp, f(x,yp)],[xp,yp, f(xp,yp)],[xp,y_, f(xp,y_)]]
+    for x in l:
+        if x[2]>num[2]:
+            num = x
+    return num[0], num[1];
+    
+#Main algorithm
+    
+def hill_climb(s,f,x0,y0):
+    x = x0
+    y = y0
+    n = 0
+    while (n>=0): 
+        xmax, ymax = best_neighbor(s,f,x,y)
+        n +=1
+        if f(xmax,ymax) <= f(x,y):
+            return x,y,n;
+            break
+        else: 
+            x = xmax
+            y = ymax
+
+
+# Run hill_climbing function from 100 random points in the range,
+# returns a dataframe of the average and standard deviation of the number of 
+#steps to convergence and of the final value f*. 
+
+def hundred_points(s, f):
+    arr = 10*np.random.rand(100,2)
+    zl=[]
+    nl=[]
+    for p in arr: 
+        x,y,n = hill_climb(s,f,p[0],p[1])
+        zl.append(f(x,y))
+        nl.append(n)
+    mean_= [mean(zl), mean(nl)]
+    std = [stdev(zl),stdev(nl)]
+    data = [mean_,std]
+    df = pd.DataFrame(data)
+    df = df.rename(index={0: "Average value", 1: "Standard deviation"},columns={0:"Final value f*", 1:"Number of steps to convergence"})
+    return df
+    
+def standardDeviation(val, squaredVal, n):
+   return np.sqrt((n * squaredVal - pow(val, 2)) / (n * (n - 1)))
+
+print("\n f1: Results for a step size of 0.01")
+print(hundred_points(0.01,f1))
+
+print("\n f1 - Results for a step size of 0.05")
+print(hundred_points(0.05,f1))
+
+print("\n f1 - Results for a step size of 0.1")
+print(hundred_points(0.1,f1))
+
+print("\n f1 - Results for a step size of 0.2")
+print(hundred_points(0.2,f1))
+
+print("\n f2 - Results for a step size of 0.01")
+print(hundred_points(0.01,f2))
+
+print("\n f2 - Results for a step size of 0.05")
+print(hundred_points(0.05,f2))
+
+print("\n f2 - Results for a step size of 0.1")
+print(hundred_points(0.1,f2))
+
+print("\n f2 - Results for a step size of 0.2")
+print(hundred_points(0.2,f2))
+
+#3 b)
+def beamNeighbours(topK, stepSize, func, beamWidth):
+
+    neighbours = [(0, 0, 0)] * (8 * beamWidth) 
+    i = 0
+    
+    for (x, y, val) in topK:
+        neighbours[8 * i] = (x - stepSize, y - stepSize, func(x - stepSize, y - stepSize))
+        neighbours[8 * i + 1] = (x - stepSize, y, func(x - stepSize, y))
+        neighbours[8 * i + 2] = (x, y - stepSize, func(x, y - stepSize))
+        neighbours[8 * i + 3] = (x + stepSize, y + stepSize, func(x + stepSize, y + stepSize))
+        neighbours[8 * i + 4] = (x + stepSize, y, func(x + stepSize, y)) 
+        neighbours[8 * i + 5] = (x, y + stepSize, func(x, y + stepSize)) 
+        neighbours[8 * i + 6] = (x - stepSize, y + stepSize, func(x - stepSize, y + stepSize))
+        neighbours[8 * i + 7] = (x + stepSize, y - stepSize, func(x + stepSize, y - stepSize))
+        i += 1
+        
+#Remove out-of-bounds neighbours by setting their value very low
+    i = 0
+    for (x, y, val) in neighbours:
+        if (x < 0) or (x > 10) or (y < 0) or (y > 10):
+            neighbours[i] = (0, 0, -100)
+        i += 1
+    return neighbours
+
+
+#Now implement the main beam algorithm
+stepSize = 0.05
+beams = [2, 4, 8, 16]
+
+
+for func in [f1, f2]:
+    df = pd.DataFrame()
+   
+    for beamWidth in beams:
+        
+        sum = 0; average = 0; squaredSum = 0; squaredAverage = 0
+        
+        #beams 100 times
+        for i in range(0, 100):
+            
+            iteration = 0
+            topK = [(0, 0, 0)] * beamWidth
+            
+            for j in range(0, beamWidth):
+                
+                topK[j] = [(10 * rand.uniform(0, 1), 10 * rand.uniform(0, 1), 0)]
+                [(x, y, val)] = topK[j]; topK[j] = (x, y, func(x, y))
+                
+            #sort values in decreasing order
+            topK = sorted(topK, key = itemgetter(2), reverse = True)
+            
+            #Min value of the topK list
+            (xMin, yMin, topKMin) = topK[-1]
+            
+            #Generate neighbours and sort by values, largest first
+            neighbours = sorted(beamNeighbours(topK, stepSize, func, beamWidth), key=itemgetter(2), reverse=True)
+           
+            #Max value of the neighbours
+            (xMax, yMax, neighbourMax) = neighbours[0]
+           
+            #Keep top k values out of the topK and neighbours lists
+            while (neighbourMax > topKMin):
+            
+                neighbourhoods = sorted(topK + neighbours, key=itemgetter(2), reverse=True)
+                
+                for j in range(0, beamWidth):
+                    
+                    (xMax, yMax, neighbourMax) = neighbourhoods[j]
+                    topK[j] = (xMax, yMax, neighbourMax)
+                    
+                (xMin, yMin, topKMin) = topK[-1]
+                neighbours = sorted(beamNeighbours(topK, stepSize, func, beamWidth), key=itemgetter(2), reverse=True)
+                (xMax, yMax, neighbourMax) = neighbours[0]
+                iteration += 1
+                
+            (xFinal, yFinal, best)= topK[0]
+            
+            
+            average += best; sum += iteration 
+            squaredAverage += pow(best, 2); squaredSum += pow(iteration, 2)
+       
+        averageSteps = sum / 100; averageValue = average / 100
+        standardDeviationSteps = standardDeviation(sum, squaredSum, 100)
+        standardDeviationValue = standardDeviation(average, squaredAverage, 100)
+        
+     
